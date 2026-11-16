@@ -1,0 +1,27 @@
+import json; from sfxlib import *
+E = json.load(open('ev_wilt.json')); M = Mix(E['end'])
+M.bed(250, 2400, 0.1); M.pulse(0.5, 0.22)
+for c in [E['grandma']-0.5, E['s1'], E['cant']-0.6, E['s2'], E['s3'], E['s4'], E['s4']+1.6, E['s5'], E['barry']-0.4, E['s6'], E['silly']+0.3, E['s7']]: M.add(c - 0.18, whoosh(), 0.26)
+def bounce(t, g=0.35): M.add(t, thud(), g)
+def shot(t0, make):
+    M.add(t0 + 0.55, whoosh(0.9, 300, 3000), 0.25)
+    if make: M.add(t0 + 0.55 + 1.1 * 0.85, whoosh(0.25, 2000, 7000), 0.4); M.add(t0 + 0.55 + 0.94, sparkle(), 0.2)
+    else: M.add(t0 + 0.55 + 0.72, clang(), 0.4); bounce(t0 + 0.55 + 1.1)
+for k in range(2): bounce(0.2 + k * 0.4)
+shot(1.0, True); M.add(0.3, ding(784), 0.2); M.add(E['grandma'] - 0.3, boing(), 0.25)
+M.add(E['seven'] - 0.1, sweep(200, 800, 0.4, 2), 0.2); M.add(E['strongest'] - 0.1, thud(), 0.4); shot(E['cant'] - 0.6, False)
+for i in range(10): M.add(E['s2'] + 0.4 + i * 0.12, pop(), 0.18)
+M.add(E['half'] - 0.2, thud(), 0.5); M.add(E['half'] - 0.2, sweep(600, 250, 0.4, 3), 0.25)
+shot(E['under'] - 0.3, True); M.add(E['granny'] - 0.1, ding(1046), 0.2)
+for k in range(6): M.add(E['s3'] + 0.4 + k * 0.33, sweep(520 - (k % 2) * 90, 380, 0.12, 4), 0.14)
+M.add(E['s4'], ding(784), 0.25); M.add(E['s4'] + 0.3, ding(1046), 0.25)
+k = 0
+while E['s4'] + 1.6 + k * 2.1 < E['hundred'] - 0.4: shot(E['s4'] + 1.6 + k * 2.1, True); k += 1
+for i in range(28): M.add(E['twenty'] - 0.3 + i * 0.054, tone(1200 + i * 20, 0.04, 30), 0.08)
+M.bed(250, 2800, 0.25, [(E['hundred'] - 0.3, E['s5'], 1)]); M.add(E['hundred'] - 0.2, sparkle(), 0.4); M.add(E['hundred'] - 0.2, ding(1568), 0.35); M.add(E['nobody'] - 0.1, thud(), 0.35)
+shot(E['s5'] + 0.25, True); M.add(E['softer'] - 0.1, swish(), 0.3)
+for i in range(3): M.add(E['barry'] - 0.3 + i * 0.35, riser(0.8), 0.12)
+M.add(E['ninety'] - 0.1, ding(1568), 0.3)
+M.add(E['quit'] - 0.15, thud(), 0.5); M.add(E['silly'] - 0.2, sweep(500, 250, 0.4, 3), 0.25); shot(E['silly'] + 0.3, False)
+M.add(E['cool'] - 0.3, sparkle(), 0.25); M.bed(250, 2600, 0.12, [(E['s7'], E['end'], 1)]); M.add(E['follow'] - 0.15, ding(1568), 0.3); M.add(E['follow'] - 0.1, pop(), 0.35)
+M.finish('wilt')

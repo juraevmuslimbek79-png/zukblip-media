@@ -1,0 +1,21 @@
+import json; from sfxlib import *
+E = json.load(open('ev_flop.json')); M = Mix(E['end'])
+M.bed(250, 2200, 0.06); M.pulse(0.5, 0.24)
+cuts = [E['jumped']-0.15, E['laughed']-0.25, E['s1'], E['only']-0.2, E['s2'], E['high']-0.25, E['s3'], E['turned']-0.1, E['s4'], E['reporter']-0.15, E['s5'], E['cleared']-0.25, E['gold']-0.25, E['s6'], E['s7'], E['call']-0.25]
+for c in cuts: M.add(c - 0.18, whoosh(), 0.26)
+def jmp(t0, dur, land=True):
+    M.add(t0 + dur * 0.38, boing(), 0.22); M.add(t0 + dur * 0.4, whoosh(dur * 0.4, 300, 3000), 0.3)
+    if land: M.add(t0 + dur * 0.85, thud(), 0.5)
+jmp(E['jumped'] - 0.15, E['laughed'] - 0.1 - E['jumped']); jmp(E['s1'], (E['only'] - 0.2 - E['s1']) / 1.05); jmp(E['s2'], (E['high'] - 0.25 - E['s2']) / 1.12)
+M.add(E['terrible'], clang(), 0.35); M.add(E['backwards'], pop(), 0.3)
+for k in range(7): M.add(E['laughed'] - 0.2 + k * 0.16, sweep(520 - (k % 2) * 90, 380, 0.12, 4), 0.16, -0.4 + (k % 3) * 0.4)
+M.add(E['face'], pop(), 0.3); M.add(E['weird'] - 0.2, ding(1568), 0.3); M.add(E['weird'] - 0.15, sparkle(), 0.25)
+for k in range(10): M.add(E['curve'] - 0.5 + k * 0.12, tone(900 + k * 50, 0.05, 6), 0.1)
+M.add(E['turned'], boing(), 0.22); M.add(E['head'], whoosh(0.5, 300, 3000), 0.3); M.add(E['s4'] - 0.35, thud(), 0.5)
+M.add(E['stop'], thud(), 0.6); M.add(E['stop'], sweep(700, 300, 0.3, 3), 0.25); M.add(E['reporter'] - 0.15, whoosh(0.6, 400, 6000), 0.4); M.add(E['reporter'] + 0.4, thud(), 0.4)
+M.add(E['mexico'], ding(784), 0.2); M.add(E['s5'], riser(E['cleared'] - E['s5']), 0.2); M.bed(250, 2600, 0.14, [(E['gold'] - 0.6, E['s6'], 1), (E['flop'] - 0.4, E['end'], 1)])
+jmp(E['cleared'] - 0.25 - 0.25 * (E['gold'] - E['cleared']), (E['gold'] - E['cleared']) / 0.8); M.add(E['gold'] - 0.25, sparkle(), 0.35); M.add(E['gold'], ding(1568), 0.3)
+M.add(E['arch'] - 0.3, sweep(300, 700, 0.5, 2), 0.2); M.add(E['bends'], whoosh(1.2, 200, 2000), 0.2); M.add(E['center'], ding(1046), 0.2); M.add(E['under'], sparkle(), 0.3); M.add(E['under'], ding(1568), 0.25)
+for i in range(4): M.add(E['s7'] + 0.3 + i * 0.9, boing(), 0.2); M.add(E['s7'] + 1.0 + i * 0.9, thud(), 0.35)
+M.add(E['flop'] - 0.5, thud(), 0.6); M.add(E['flop'] - 0.45, sparkle(), 0.3)
+M.finish('flop')

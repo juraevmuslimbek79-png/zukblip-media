@@ -1,0 +1,102 @@
+<html><head><meta charset="utf-8"></head><body style="margin:0;background:#000"><canvas id=c></canvas>
+<script type="importmap">{"imports":{"three":"./three/build/three.module.js","three/addons/":"./three/examples/jsm/"}}</script>
+<script type="module">
+import { THREE, E, Wd, Hd, scene, cam, clamp, lerp, ease, easeOut, k01, V, hash, add, toon, canvasTex, setTime, bill, sharp, hideAll, put, cm, ctx, proj, speedLines, star, flash, glow2d, rays, text2d, render } from './kit.js';
+import { MZ } from './set_stadium.js';
+const S = i => E['s' + i];
+// ---- props
+const seamT = canvasTex(256, 128, (g, w, h) => { g.fillStyle = '#fbfbf4'; g.fillRect(0, 0, w, h); g.strokeStyle = '#d8302a'; g.lineWidth = 7; g.setLineDash([6, 5]); for (const o of [0, 128]) { g.beginPath(); for (let x = 0; x <= 128; x += 4) { const y = 64 + Math.sin((x / 128) * Math.PI * 2) * 34; x ? g.lineTo(o + x, y) : g.moveTo(o + x, y); } g.stroke(); } });
+const ball = add(new THREE.SphereGeometry(0.13, 20, 14), 0xffffff, 0, 0, 0, 0.018, scene, seamT); sharp(ball);
+const ghosts = []; for (let i = 0; i < 14; i++) { const gm = new THREE.Mesh(new THREE.SphereGeometry(0.13, 14, 10), new THREE.MeshBasicMaterial({ color: 0xffffff, transparent: true, opacity: 0.85, fog: false })); scene.add(gm); sharp(gm); ghosts.push(gm); }
+const tree = new THREE.Group(); scene.add(tree); add(new THREE.CylinderGeometry(0.28, 0.4, 3.2, 10), 0x8a5a2a, 0, 1.6, 0, 0.05, tree); for (const [x, y, z, r] of [[0, 3.8, 0, 1.5], [-0.9, 3.2, 0.2, 1.0], [0.9, 3.3, -0.1, 1.1], [0.2, 4.7, 0, 1.0]]) add(new THREE.SphereGeometry(r, 16, 12), 0x3aa84a, x, y, z, 0.05, tree); tree.position.set(2.2, 0, -10.5);
+// ---- characters
+const pit = bill({ shirt: '#f6f6f2', trim: '#c8302a', hat: 'cap', hatC: '#c8302a', num: '17', hair: '#4a3020', glove: true, ph: 0.4 });
+const pit2 = bill({ shirt: '#9ab8e8', trim: '#1a2a5a', hat: 'cap', hatC: '#1a2a5a', num: '29', hair: '#2a2230', glove: true, ph: 1.4 });
+const bat = bill({ shirt: '#f6f6f2', trim: '#1a3a8a', hat: 'helmet', hatC: '#1a3a8a', num: '7', hair: '#4a3020', ph: 0.9 });
+const sc1 = bill({ shirt: '#7a9ad8', coat: '#f8f8f4', hair: '#5a3a20', mustache: true, ph: 0.7 }), sc2 = bill({ shirt: '#d87a9a', coat: '#f8f8f4', hair: '#2a2230', hairStyle: 'bob', ph: 1.9 });
+const old = bill({ shirt: '#8ab0e0', coat: '#f8f8f4', hair: '#ececf2', mustache: true, ph: 1.1 });
+// ball path: u 0..1 from release to plate ; brk = late sideways break (m)
+const bp = (u, brk = 0.8) => [lerp(0.3, -0.05, u) + brk * u ** 2.6, lerp(2.25, 0.9, u) + 0.35 * Math.sin(Math.PI * u), lerp(MZ + 1.3, -0.3, u)];
+function setBall(p, t, s = 1) { ball.visible = true; ball.position.set(...p); ball.rotation.set(t * 22, t * 9, 0); ball.scale.setScalar(s); }
+function trail(u, brk, col = '255,220,90', fn = bp) { ctx.save(); ctx.lineCap = 'round'; for (let q = 1; q <= 36; q++) { const a = (q - 1) / 36 * u, b = q / 36 * u; const [x0, y0] = proj(...fn(a, brk)), [x1, y1] = proj(...fn(b, brk)); ctx.strokeStyle = `rgba(${col},${0.15 + 0.75 * q / 36})`; ctx.lineWidth = 4 + 10 * q / 36; ctx.beginPath(); ctx.moveTo(x0, y0); ctx.lineTo(x1, y1); ctx.stroke(); } ctx.restore(); }
+// pitcher motion: k 0..1 over the delivery window; returns pose
+const deliver = (k, extra = {}) => k <= 0 ? Object.assign({ pose: 'set', f: 1, eyes: 'angry', mouth: 'flat' }, extra) : k < 0.75 ? Object.assign({ pose: 'windup', wu: Math.sin(k / 0.75 * Math.PI * 0.5), f: 1, eyes: 'angry', mouth: 'grit' }, extra) : Object.assign({ pose: 'point', f: 1, eyes: 'wide', mouth: 'o', armF: [2.2, 2.6] }, extra);
+const pop = (t, a, s = 0.18) => { const k = easeOut(k01(t, a, a + s)); return k * (1 + 0.22 * Math.sin(k * Math.PI)); };
+// ---- 2D panels
+function grid(c0 = '#16205a', c1 = '#0a0e2e') { const g = ctx.createLinearGradient(0, 0, 0, Hd); g.addColorStop(0, c0); g.addColorStop(1, c1); ctx.fillStyle = g; ctx.fillRect(0, 0, Wd, Hd); ctx.strokeStyle = 'rgba(255,255,255,0.06)'; ctx.lineWidth = 2; for (let x = 0; x < Wd; x += 60) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, Hd); ctx.stroke(); } for (let y = 0; y < Hd; y += 60) { ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(Wd, y); ctx.stroke(); } }
+function drawBall2(x, y, r, rot) { ctx.save(); ctx.translate(x, y); glow2d(0, 0, r * 2.2, '255,255,255', 0.25); ctx.fillStyle = '#fbfbf4'; ctx.strokeStyle = '#17121c'; ctx.lineWidth = r * 0.12; ctx.beginPath(); ctx.arc(0, 0, r, 0, 7); ctx.fill(); ctx.stroke(); ctx.rotate(rot); ctx.strokeStyle = '#d8302a'; ctx.lineWidth = r * 0.09; ctx.setLineDash([r * 0.12, r * 0.1]); ctx.beginPath(); ctx.arc(-r * 1.25, 0, r * 0.95, -0.9, 0.9); ctx.stroke(); ctx.beginPath(); ctx.arc(r * 1.25, 0, r * 0.95, Math.PI - 0.9, Math.PI + 0.9); ctx.stroke(); ctx.restore(); }
+function magazine(t, a) { const k = easeOut(a); ctx.save(); ctx.translate(360, 600); ctx.rotate((1 - k) * 8 + 0.04); ctx.scale(0.15 + 0.85 * k, 0.15 + 0.85 * k); ctx.fillStyle = 'rgba(0,0,0,0.35)'; ctx.fillRect(-270, -360, 580, 780); ctx.fillStyle = '#f6efd8'; ctx.strokeStyle = '#17121c'; ctx.lineWidth = 8; ctx.fillRect(-290, -390, 580, 780); ctx.strokeRect(-290, -390, 580, 780);
+  ctx.fillStyle = '#17121c'; ctx.textAlign = 'center'; ctx.font = '900 40px Georgia'; ctx.fillText('PICTURE WEEKLY', 0, -330); ctx.font = '700 28px Georgia'; ctx.fillText('SEPTEMBER 1941', 0, -290); ctx.fillRect(-260, -270, 520, 6);
+  ctx.font = '900 66px Georgia'; ctx.fillText('THE CURVE', 0, -190); ctx.fillText('BALL IS AN', 0, -122); ctx.fillText('ILLUSION', 0, -54);
+  ctx.fillStyle = '#20202a'; ctx.fillRect(-240, -10, 480, 270); ctx.save(); ctx.beginPath(); ctx.rect(-240, -10, 480, 270); ctx.clip(); for (let i = 0; i < 9; i++) { const x = -200 + i * 50, y = 60 + i * 14; ctx.fillStyle = `rgba(255,255,255,${0.35 + i * 0.07})`; ctx.beginPath(); ctx.arc(x, y, 16, 0, 7); ctx.fill(); } ctx.restore(); ctx.strokeStyle = '#17121c'; ctx.strokeRect(-240, -10, 480, 270);
+  ctx.fillStyle = '#b8ae94'; for (let r = 0; r < 4; r++) { ctx.fillRect(-240, 290 + r * 24, 220, 10); ctx.fillRect(20, 290 + r * 24, 220, 10); } ctx.restore(); }
+function tunnel(t) { grid('#123a5a', '#081a2e'); const T0 = E.tunnel - 0.6; const x0 = 70, x1 = 650, y0 = 330, y1 = 830; ctx.fillStyle = 'rgba(120,200,255,0.08)'; ctx.fillRect(x0, y0, x1 - x0, y1 - y0); ctx.strokeStyle = '#9ad8ff'; ctx.lineWidth = 10; ctx.strokeRect(x0, y0, x1 - x0, y1 - y0);
+  ctx.save(); ctx.beginPath(); ctx.rect(x0, y0, x1 - x0, y1 - y0); ctx.clip(); ctx.lineCap = 'round'; for (let i = 0; i < 22; i++) { const y = y0 + 20 + hash(i) * (y1 - y0 - 40), k = (t * (0.9 + hash(i + 3) * 0.6) + hash(i + 1)) % 1, x = x1 + 60 - k * (x1 - x0 + 200); ctx.strokeStyle = `rgba(160,225,255,${0.6 * Math.sin(k * Math.PI)})`; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 90, y); ctx.stroke(); } ctx.restore();
+  const u = ((t - T0) / 1.6) % 1, bx = 360 - 210 * u * u, by = y0 + 30 + u * (y1 - y0 - 80); ctx.setLineDash([12, 12]); ctx.strokeStyle = 'rgba(255,255,255,0.35)'; ctx.lineWidth = 4; ctx.beginPath(); ctx.moveTo(360, y0 + 30); ctx.lineTo(360, y1 - 50); ctx.stroke(); ctx.strokeStyle = '#ffd24a'; ctx.beginPath(); for (let q = 0; q <= 20; q++) { const uu = q / 20 * u; const xx = 360 - 210 * uu * uu, yy = y0 + 30 + uu * (y1 - y0 - 80); q ? ctx.lineTo(xx, yy) : ctx.moveTo(xx, yy); } ctx.stroke(); ctx.setLineDash([]); drawBall2(bx, by, 34, t * 14);
+  text2d('WIND', 580, 300, 34, '#9ad8ff', 1); ctx.fillStyle = '#9ad8ff'; ctx.beginPath(); ctx.moveTo(490, 300); ctx.lineTo(520, 285); ctx.lineTo(520, 315); ctx.fill();
+  text2d('WIND TUNNEL', 360, 200, 74, '#ffd24a', pop(t, E.tunnel - 0.4)); text2d('SPIN + WIND', 360, 1020, 50, '#fff', pop(t, E.tunnel)); }
+function magnus(t) { grid(); const cx = 360, cy = 600, r = 110, rot = t * 7; const ap = easeOut(k01(t, E.pushes - 0.2, E.pushes + 0.3)), defl = 0.4 + 0.6 * ease(k01(t, E.spin - 0.2, E.spin + 0.6));
+  ctx.save(); ctx.lineCap = 'round'; for (let i = 0; i < 9; i++) { const yy = cy - 320 + i * 80; ctx.strokeStyle = 'rgba(140,215,255,0.55)'; ctx.lineWidth = 5; ctx.beginPath(); for (let q = 0; q <= 60; q++) { const x = 700 - q * 12; const near = Math.exp(-((x - cx) ** 2) / 26000) * Math.exp(-((yy - cy) ** 2) / 40000); const behind = x < cx ? (1 - Math.exp(-(cx - x) / 160)) * Math.exp(-((yy - cy) ** 2) / 50000) : 0; const y = yy + (yy < cy ? -1 : 1) * near * 40 - behind * 150 * defl; q ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); const k = (t * 0.8 + i * 0.13) % 1; const x = 700 - k * 720; ctx.fillStyle = '#c8f0ff'; ctx.beginPath(); ctx.arc(x, yy - (x < cx ? (1 - Math.exp(-(cx - x) / 160)) * Math.exp(-((yy - cy) ** 2) / 50000) * 150 * defl : 0), 6, 0, 7); ctx.fill(); } ctx.restore();
+  drawBall2(cx, cy, r, rot); ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 8; ctx.beginPath(); ctx.arc(cx, cy, r + 34, -2.4, -0.6); ctx.stroke(); ctx.fillStyle = '#ffd24a'; const ax = cx + Math.cos(-0.6) * (r + 34), ay = cy + Math.sin(-0.6) * (r + 34); ctx.beginPath(); ctx.moveTo(ax + 18, ay - 4); ctx.lineTo(ax - 10, ay - 22); ctx.lineTo(ax - 6, ay + 14); ctx.fill();
+  if (ap > 0) { const L = 190 * ap; ctx.save(); ctx.translate(cx, cy + r + 20); ctx.fillStyle = '#ff5a4a'; ctx.strokeStyle = '#17121c'; ctx.lineWidth = 7; ctx.beginPath(); ctx.moveTo(-26, 0); ctx.lineTo(26, 0); ctx.lineTo(26, L); ctx.lineTo(56, L); ctx.lineTo(0, L + 60); ctx.lineTo(-56, L); ctx.lineTo(-26, L); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.restore(); text2d('PUSH', cx + 150, cy + r + 140, 56, '#ff8a7a', ap); }
+  const ns = pop(t, S(6) + 0.1), sp = pop(t, E.spin - 0.1); if (sp <= 0) { text2d('SPEED?', 360, 200, 90 * ns, '#fff', ns > 0 ? 1 : 0); } else { text2d('SPEED', 360, 170, 54, 'rgba(255,255,255,0.6)', 1); ctx.strokeStyle = '#ff4a3a'; ctx.lineWidth = 10; ctx.beginPath(); ctx.moveTo(250, 175); ctx.lineTo(470, 160); ctx.stroke(); text2d('SPIN!', 360, 270, 110 * sp, '#ffd24a', 1, -0.04); }
+  text2d('MAGNUS EFFECT', 360, 1030, 50, '#9ad8ff', easeOut(k01(t, E.pushes, E.pushes + 0.3))); }
+function topdown(t, u) { // exaggerated top view; u = ball progress
+  const P = (q, b) => { const [x, , z] = bp(q, b); return proj(x, 0.4, z); }; ctx.save(); ctx.setLineDash([14, 14]); ctx.strokeStyle = 'rgba(255,255,255,0.8)'; ctx.lineWidth = 6; ctx.beginPath(); for (let q = 0; q <= 30; q++) { const [x, y] = P(q / 30, 0); q ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); ctx.setLineDash([]); ctx.restore();
+  ctx.save(); ctx.lineCap = 'round'; ctx.strokeStyle = '#ffd24a'; ctx.lineWidth = 12; glow2d(P(u, 3.0)[0], P(u, 3.0)[1], 90, '255,210,80', 0.6); ctx.beginPath(); for (let q = 0; q <= 40; q++) { const [x, y] = P(q / 40 * u, 3.0); q ? ctx.lineTo(x, y) : ctx.moveTo(x, y); } ctx.stroke(); ctx.restore(); const [bx, by] = P(u, 3.0); drawBall2(bx, by, 22, t * 18);
+  const m = easeOut(k01(t, E.seventeen - 0.2, E.seventeen + 0.2)); if (m > 0) { const [ax, ay] = P(1, 0), [cx, cy] = P(1, 3.0); ctx.strokeStyle = '#ff5a4a'; ctx.lineWidth = 8; ctx.beginPath(); ctx.moveTo(ax, ay - 40); ctx.lineTo(lerp(ax, cx, m), ay - 40); ctx.stroke(); text2d('17.5 IN', (ax + cx) / 2, ay - 150, 66 * pop(t, E.seventeen - 0.2), '#ffd24a'); text2d('44 cm', (ax + cx) / 2, ay - 90, 38, '#fff', m); }
+  const [lx, ly] = P(0, 0); text2d('60 FT 6 IN', 360, 190, 54, '#fff', easeOut(k01(t, S(5), S(5) + 0.3))); }
+// ---- scenes
+const BEHIND = (u, o = {}) => cm([0.5, 2.1, 5.0], [0.3, 2.0, 4.0], [0, 1.7, -12], [0, 1.7, -12], 24, 21, u, Object.assign({ roll: 0.02, blur: 5, focus: 0.7 }, o));
+window.renderAt = function (t) {
+  hideAll(); const fx = []; let CAM; setTime('day'); tree.visible = false; ghosts.forEach(g => g.visible = false);
+  if (t < E.fake - 0.15) { // hook pitch
+    const rel = 1.3, fl = 1.1, u = k01(t, rel, rel + fl); put(pit, 0, 0.36, MZ, deliver(k01(t, 0.2, rel + 0.25)), 1.25); const sw = k01(t, rel + fl - 0.25, rel + fl + 0.1);
+    put(bat, -1.05, 0, -0.5, { pose: sw > 0 ? 'swing' : 'bat', sw: ease(sw), f: 1, eyes: sw > 0.6 ? 'wide' : 'angry', mouth: sw > 0.6 ? 'o' : 'grit' });
+    if (u > 0 && u < 1) setBall(bp(u, 0.8), t); CAM = BEHIND(ease(k01(t, 0, E.fake))); if (t > rel + fl + 0.2) CAM.tint = 'rgb(225,220,255)';
+    fx.push(() => { if (u > 0) trail(Math.min(u, 1), 0.8); text2d('1941', 360, 200, 96 * pop(t, 0.25), '#ffd24a'); const w = k01(t, rel + fl, rel + fl + 0.6); if (w > 0) { star(300, 780, 30 + Math.sin(w * Math.PI) * 60, Math.sin(w * Math.PI)); text2d('WHIFF!', 360, 330, 92 * pop(t, rel + fl), '#fff', 1, -0.06); } });
+  } else if (t < S(1)) { CAM = BEHIND(1, { blur: 14, focus: 2 }); put(pit, 0, 0.36, MZ, deliver(1), 1.25); put(bat, -1.05, 0, -0.5, { pose: 'swing', sw: 1, f: 1, eyes: 'wide', mouth: 'o' });
+    fx.push(() => { flash(0.45, '20,16,40'); magazine(t, k01(t, E.fake - 0.15, E.fake + 0.3)); const a = pop(t, E.fake + 0.05); if (a > 0) { ctx.save(); ctx.translate(380, 560); ctx.rotate(-0.22); ctx.scale(a, a); ctx.strokeStyle = '#e8302a'; ctx.lineWidth = 14; ctx.strokeRect(-200, -70, 400, 140); ctx.font = '900 110px Arial'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillStyle = '#e8302a'; ctx.fillText('FAKE?!', 0, 6); ctx.restore(); } });
+  } else if (t < E.seeing - 0.3) { // batter POV
+    const rel = S(1) + 0.5, arr = E.bends + 0.35, u = k01(t, rel, arr); put(pit, 0, 0.36, MZ, deliver(k01(t, S(1) - 0.3, rel + 0.25)), 1.25);
+    const shake = t > arr ? Math.sin(t * 50) * 0.01 * Math.max(0, 1 - (t - arr) * 3) : 0; CAM = { p: [-0.7 + shake, 1.85, 0.9], l: [-0.1, 1.55, -14], f: lerp(30, 24, ease(k01(t, S(1), arr))), roll: -0.04 + shake, blur: 3, focus: 0.6 };
+    if (u > 0 && u < 1) setBall(bp(u, 1.0), t, 1.4);
+    fx.push(() => { if (u > 0) trail(Math.min(u, 1), 1.0); text2d("IMAGINE YOU'RE", 360, 170, 60, '#fff', easeOut(k01(t, S(1), S(1) + 0.2))); text2d('THE BATTER', 360, 245, 74, '#ffd24a', easeOut(k01(t, S(1) + 0.25, S(1) + 0.45))); const b = pop(t, E.bends - 0.05); if (b > 0) text2d('BENDS!', 470, 420, 90 * b, '#ff6a4a', 1, 0.08); if (t > arr) { flash(0.5 - (t - arr) * 2); speedLines(t, 18, 'rgba(255,255,255,0.7)', 360, 640, 0.2); } });
+  } else if (t < S(2)) { const u = ease(k01(t, E.seeing - 0.3, S(2))); put(sc1, -0.85, 0, -4.2, { pose: 'shrug', f: 1, eyes: 'half', lid: 0.4, mouth: 'smirk' }); put(sc2, 0.85, 0, -4.4, { pose: 'shrug', f: -1, eyes: 'closed', mouth: 'smile' });
+    CAM = cm([0.4, 1.6, 2.4], [0.1, 1.9, 1.6], [0, 2.2, -4.3], [0, 2.3, -4.3], 36, 32, u, { roll: 0.05, blur: 8, focus: 0.85 });
+    fx.push(() => { text2d('"YOU\'RE JUST', 360, 200, 64, '#fff', pop(t, E.seeing - 0.25)); text2d('SEEING THINGS"', 360, 280, 70, '#ffd24a', pop(t, E.seeing - 0.1)); });
+  } else if (t < S(3)) { // strobe photos
+    setTime('night'); const u = k01(t, S(2), S(3)); put(pit, 0, 0.36, MZ, deliver(1), 1.25); put(bat, -1.05, 0, -0.5, { pose: 'bat', f: 1, eyes: 'normal', mouth: 'flat' });
+    CAM = cm([9, 3.6, 3], [8.2, 3.2, 1.8], [0, 1.3, -10], [0, 1.4, -10.5], 44, 40, ease(u), { roll: -0.04, dark: 0.35 }); let lastF = -1;
+    ghosts.forEach((g, i) => { const ti = E.strobe - 0.3 + i * 0.13; if (t > ti) { g.visible = true; g.position.set(...bp(i / 13, 0.12)); g.scale.setScalar(2.2); g.material.opacity = 0.9 - (13 - i) * 0.02; lastF = Math.max(lastF, ti); } });
+    fx.push(() => { const d = t - lastF; if (lastF > 0 && d < 0.1) flash(0.35 * (1 - d / 0.1)); text2d('STROBE PHOTOS', 360, 200, 70, '#9ad8ff', pop(t, E.strobe - 0.3)); const a = pop(t, E.illusion - 0.15); if (a > 0) { text2d('OPTICAL', 360, 300, 76 * a, '#fff', 1, Math.sin(t * 9) * 0.04); text2d('ILLUSION?', 360, 385, 84 * a, '#ffd24a', 1, -Math.sin(t * 9) * 0.04); } });
+  } else if (t < E.tree - 0.35) { // the pitcher answers
+    const u = ease(k01(t, S(3), E.tree - 0.35)); put(pit, 0, 0.36, MZ, { pose: 'point', f: -1, eyes: 'half', lid: 0.3, mouth: 'smirk', armF: [2.6, 2.2] }, 1.25);
+    const cp = V([1.2, 2.2, MZ + 6.2], [0.8, 2.5, MZ + 5.0], u); CAM = { p: cp, l: [0, 2.95, MZ], f: lerp(34, 29, u), roll: 0.06, blur: 9, focus: 1.0 };
+    fx.push(() => { text2d('THE PITCHER', 360, 180, 64, '#fff', pop(t, S(3))); text2d('FIRES BACK', 360, 255, 64, '#ffd24a', pop(t, S(3) + 0.3)); });
+  } else if (t < S(4)) { // around the tree
+    tree.visible = true; const rel = E.tree, u = k01(t, rel, E.hit); const P = q => [lerp(0.3, 3.0, q) - 2.4 * Math.sin(Math.PI * q) ** 1.2, lerp(2.3, 2.9, q) + 0.5 * Math.sin(Math.PI * q), lerp(MZ + 1.3, -6.4, q)];
+    put(pit, 0, 0.36, MZ, deliver(k01(t, rel - 0.35, rel + 0.15)), 1.25); const hitd = t - E.hit; put(sc1, 3.0, 0, -6.6, hitd > 0 ? { pose: 'shrug', f: -1, eyes: 'closed', mouth: 'o', dy: Math.sin(Math.min(1, hitd * 3) * Math.PI) * -40 } : { pose: 'crouch', f: -1, eyes: 'wide', mouth: 'grin', look: -1 });
+    if (u > 0 && u < 1) setBall(P(u), t, 1.4); CAM = cm([-3.5, 5.5, 4.5], [-3.0, 5.0, 3.6], [2.2, 1.4, -10], [2.6, 1.7, -8.8], 46, 44, ease(k01(t, E.tree - 0.35, S(4))), { roll: 0.03 });
+    fx.push(() => { if (u > 0) trail(Math.min(u, 1), 0, '255,220,90', q => P(q)); text2d('"GET BEHIND', 360, 180, 64, '#fff', pop(t, E.tree - 0.3)); text2d('A TREE..."', 360, 255, 64, '#fff', pop(t, E.tree - 0.1)); if (hitd > 0) { const [x, y] = proj(3.0, 3.2, -6.6); star(x, y, 30 + Math.sin(k01(hitd, 0, 0.5) * Math.PI) * 70, Math.sin(k01(hitd, 0, 0.6) * Math.PI)); text2d('BONK!', 360, 360, 100 * pop(t, E.hit), '#ff5a4a', 1, 0.07); } });
+  } else if (t < E.tunnel - 0.6) { // 1959
+    setTime('sunset'); const u = ease(k01(t, S(4), E.tunnel - 0.6)); put(old, 0.2, 0, -4.2, { pose: t > E.pitchers - 0.3 ? 'point' : 'think', f: 1, eyes: 'half', lid: 0.3, mouth: 'smile', armF: [2.4, 2.0] });
+    put(pit, 2.2, 0, -6.5, deliver(((t - S(4)) / 1.6) % 1, { f: -1 })); put(pit2, -2.0, 0, -6.8, deliver(((t - S(4) + 0.8) / 1.6) % 1));
+    CAM = cm([0.8, 1.6, 2.6], [0.4, 1.9, 1.6], [0.1, 2.2, -5], [0.1, 2.3, -5], 44, 40, u, { roll: -0.05, blur: 7, focus: 0.85, charTint: 'rgb(255,226,200)' }); CAM.under = [() => rays(60, 360, 12, 1500, '255,180,100', t)];
+    fx.push(() => { text2d('1959', 360, 190, 120 * pop(t, S(4)), '#ffd24a'); const a = pop(t, S(4) + 1.0); if (a > 0) { const [x, y] = proj(0.2, 4.1, -4.2); text2d('AGE 84', 360, 290, 60 * a, '#fff'); } });
+  } else if (t < S(5)) { CAM = { p: [0, 2, 3], l: [0, 2, -5], f: 40 }; fx.push(() => tunnel(t));
+  } else if (t < S(6)) { // top-down measurement
+    const u = k01(t, S(5) + 0.2, E.seventeen + 0.1); put(pit, 0, 0.36, MZ, deliver(k01(t, S(5) - 0.5, S(5) + 0.3)), 1.25); put(bat, -1.05, 0, -0.5, { pose: 'bat', f: 1, eyes: 'normal', mouth: 'flat' });
+    CAM = cm([0.3, 27, 2.5], [0.2, 25, 1.5], [0, 0, -9.3], [0, 0, -9.3], 52, 52, ease(k01(t, S(5), S(6))), { roll: 0 }); fx.push(() => topdown(t, ease(u)));
+  } else if (t < S(7)) { CAM = { p: [0, 2, 3], l: [0, 2, -5], f: 40 }; fx.push(() => magnus(t));
+  } else { // batters were right + CTA
+    const u = ease(k01(t, S(7), E.end)); put(bat, 0, 0, -0.5, { pose: 'cheer', f: 1, eyes: 'closed', mouth: 'grin', dy: -Math.abs(Math.sin(t * 7)) * 30 });
+    CAM = cm([1.2, 1.2, -5.8], [0.7, 1.5, -4.8], [0, 2.3, -0.5], [0, 2.4, -0.5], 40, 36, u, { roll: 0.06, blur: 8, focus: 0.9 });
+    fx.push(() => { text2d('BATTERS', 360, 170, 76, '#fff', pop(t, E.right - 0.4)); text2d('WERE RIGHT!', 360, 255, 84, '#ffd24a', pop(t, E.right - 0.15)); for (let k = 0; k < 40; k++) { const d = (t * 0.5 + hash(k)) % 1; ctx.fillStyle = ['#ffd24a', '#ff5a4a', '#5ad8ff', '#8ae86a'][k % 4]; ctx.save(); ctx.translate(hash(k + 1) * Wd, d * Hd); ctx.rotate(t * 5 + k); ctx.fillRect(-8, -5, 16, 10); ctx.restore(); }
+      const a = pop(t, E.follow - 0.15, 0.25); if (a > 0) { ctx.save(); ctx.translate(360, 640); ctx.scale(a, a); glow2d(0, 0, 300, '255,60,60', 0.45 + 0.15 * Math.sin(t * 8)); ctx.fillStyle = '#e8302a'; ctx.strokeStyle = '#fff'; ctx.lineWidth = 8; ctx.beginPath(); ctx.roundRect(-230, -70, 460, 140, 70); ctx.fill(); ctx.stroke(); ctx.restore(); text2d('FOLLOW +', 360, 642, 86 * a, '#fff'); text2d('MORE MYTHS STRUCK OUT', 360, 770, 40, '#ffd24a', easeOut(k01(t, E.follow + 0.4, E.follow + 0.7))); const tap = (t - E.follow) % 1.2; if (t > E.follow + 0.5) { const s = 1 - 0.15 * Math.sin(Math.min(1, tap / 0.3) * Math.PI); ctx.save(); ctx.translate(500, 700); ctx.scale(s, s); ctx.fillStyle = '#fff'; ctx.strokeStyle = '#17121c'; ctx.lineWidth = 6; ctx.beginPath(); ctx.arc(0, 0, 26, 0, 7); ctx.fill(); ctx.stroke(); ctx.restore(); } }
+      flash(k01(t, E.end - 0.35, E.end), '4,4,14'); });
+  }
+  return render(t, CAM, fx);
+};
+window.ready = true;
+</script></body></html>
